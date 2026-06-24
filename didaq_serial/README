@@ -1,0 +1,8 @@
+flow for serial board startup:
+NOTE: first two steps are only needed on board bring up
+NOTE2: easy way to turn off data/ADCs is to run the reconfigure script
+
+
+didaq_i2c.py -> sets up sampling clocks
+reconfigure.py -> reconfigure FPGA, necessary step for sampling clocks to register, ctrl-c this after running 
+didaq_adc_config.py -> setup  ADCs and JESD data links

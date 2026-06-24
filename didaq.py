@@ -1,0 +1,277 @@
+#import serial
+import time
+import spidev
+import json
+
+READ_BYTE=0x01
+WRITE_BYTE=0x02
+BYTES_PER_WORD=4
+
+#useful general purpose registers
+adr_fw_version = 0x00
+adr_board_version = 0x01
+adr_misc_ctrl  = 0x34
+
+class Didaq:
+    def __init__(self, dev='/dev/spidev1.0'):
+        self.spi = spidev.SpiDev()
+        self.spi.open_path(dev)
+        self.spi.max_speed_hz = 10000000
+        self.spi.mode = 0b01
+        self.BYTE_ADDRESS_BITSHIFT=2 ##for system memory map access
+        
+    def __del__(self):
+        self.spi.close()
+
+    def spiXfer(self, rw, address_word, data_word):
+        '''
+        data is 4 byte list (hex)
+        write_words is  4-byte list'''
+        send_bytes= [(rw << 7) | ((address_word & 0x7F00) >> 8), address_word & 0x00FF, data_word[0], data_word[1], data_word[2], data_word[3]]
+        #print(send_bytes)
+        retval=self.spi.xfer2(send_bytes)
+        return retval
+
+    def write(self, address, data):
+        self.spiXfer(rw=0, address_word=address, data_word=data)
+
+    def read(self, address):
+        retval=self.spiXfer(rw=1, address_word=address, data_word=[0x00,0x00,0x00,0x00])
+        return retval
+
+    def getFwVersion(self):
+        self.version = self.read(address=0x0000)
+        return self.version
+    
+    def getBoardVersion(self):
+        self.version = self.read(address=0x0001)
+        return self.version
+    
+    def enableADCPowerRegs(self, enable=True):
+        addr = 0x0034
+        regval = self.read(addr)
+        print(regval)
+        if enable == True:
+            regval[3] = regval[3] | 0x30
+            self.write(addr, regval)
+        else:
+            regval[3] = regval[3] & ~0x30
+            self.write(addr, regval)
+        regval=self.read(addr)
+        return regval
+   
+    def enableCalPulse(self, enable=True):
+        addr = 0x0034
+        regval = self.read(addr)
+        print(regval)
+        if enable == True:
+            regval[3] = regval[3] | 0x0F
+            self.write(addr, regval)
+        else:
+            regval[3] = regval[3] & ~0x0F
+            self.write(addr, regval)
+        regval=self.read(addr)
+        return regval
+
+    def systemAccessRead(self, address):
+        '''32-bit memory-map address
+        '''
+        self.write(address=0x0006, data=[(address & 0xFF000000) >> 24,(address & 0x00FF0000)>>16,(address & 0x0000FF00) >> 8, address & 0x000000FF])
+        self.write(address=0x0009, data=[0x00,0x00,0x00,0x01]) #read rqst
+        retval = self.read(address=0x0008)
+        return retval
+
+    def systemAccessWrite(self, address, data):
+        '''memory-mapped write, 32 bit address + 32 bit data
+        '''
+        self.write(address=0x0006, data=[(address & 0xFF000000) >> 24,(address & 0x00FF0000)>>16,(address & 0x0000FF00) >> 8, address & 0x000000FF])
+        self.write(address=0x0007, data=data)
+        self.write(address=0x0009, data=[0x00,0x00,0x00,0x02]) #write rqst
+        
+
+##------------------------------------------------     
+# class to interface to the secure device manager on the Agilex FPGA
+# via the memory-mapped interface over SPI
+class SDM_SPI:
+    def __init__(self, fw_application_addr=None):
+        self.spi = Didaq()
+        self.base_addr = 0x010C0000 #Mailbox client IP memory-mapped based address
+        self.command_addr = self.base_addr | 0x0
+        self.command_last_word_addr = self.base_addr | 0x4 #byte address
+        self.readValue(16) #flush
+        if fw_application_addr == None:
+            self.fw_application_addr = [0x00,0x78,0x00,0x00]
+        else:
+            self.fw_application_addr = fw_application_addr
+            
+    def getFifoFreeSpace(self):
+        header_addr = self.base_addr | (0x02 << self.spi.BYTE_ADDRESS_BITSHIFT)
+        retval_cmd=self.spi.systemAccessRead(header_addr)
+        header_addr = self.base_addr | (0x06 << self.spi.BYTE_ADDRESS_BITSHIFT)
+        retval_rps=self.spi.systemAccessRead(header_addr)
+        #print("write fifo:",retval_cmd, "read fifo:", retval_rps)
+
+    def readValue(self, num_words):
+        header_addr = self.base_addr | (0x05 << self.spi.BYTE_ADDRESS_BITSHIFT)
+        retval=[]  
+        for i in range(num_words):
+            time.sleep(0.01) #this is stupid but needed, probably can check that the write/rd request system register is cleared
+            retval.append(self.spi.systemAccessRead(header_addr))
+        return retval
+
+    def getErrorCode(self, response_header):
+        #eventually enumerate the potential errors...
+        if response_header[-1] != 0x00:
+            print('error')
+        
+    def getID(self):
+        command = [0x05, 0x00, 0x00,  0x10]
+        print("get JTAG id..")
+        self.spi.systemAccessWrite(self.command_last_word_addr, command)
+        self.getFifoFreeSpace()
+        fid=self.readValue(2)
+        jtag_id = convertListToWord(fid[1])
+        return jtag_id
+
+    def getChipID(self):
+        command = [0x06, 0x00, 0x00,  0x12]
+        print("get chip id..")
+        self.spi.systemAccessWrite(self.command_last_word_addr, command)
+        self.getFifoFreeSpace()
+        fid=self.readValue(3)
+        _chip_id_hi = convertListToWord(fid[1])
+        _chip_id_lo = convertListToWord(fid[2])
+        chip_id = (_chip_id_hi << 32) | _chip_id_lo
+        return chip_id
+
+    def qspiOpen(self):
+        command = [0x08,0x00,0x00,0x32]
+        self.spi.systemAccessWrite(self.command_last_word_addr, command)
+        self.readValue(1) #flush header response
+        
+    def qspiClose(self):
+        command = [0x09,0x00,0x00,0x33]
+        self.spi.systemAccessWrite(self.command_last_word_addr, command)
+        self.readValue(1) #flush header response
+
+    def qspiChipSelect(self):
+        #QSPI attached to nCSO[0]
+        #########
+        command = [0x0A,0x00,0x10,0x34]
+        self.spi.systemAccessWrite(self.command_addr, command)
+        self.spi.systemAccessWrite(self.command_last_word_addr, [0x00,0x00,0x00,0x00])
+        retval=self.readValue(1) #flush header response word
+        self.getErrorCode(retval[0])
+        
+    def reconfigure(self):
+        command = [0x01, 0x00, 0x20,  0x5C]
+        print('reconfigure..')
+        self.spi.systemAccessWrite(self.command_addr, command)
+        self.spi.systemAccessWrite(self.command_addr, self.fw_application_addr) #address [31:0], from programming file generation
+        self.getFifoFreeSpace()
+        self.spi.systemAccessWrite(self.command_last_word_addr, [0x00, 0x00, 0x00, 0x00]) #address[63:32]-should be all 0's
+
+        self.getFifoFreeSpace()
+        print(self.readValue(1))
+
+    def getConfigStatus(self):
+        command = [0x03,0x00,0x00,0x04]
+        self.spi.systemAccessWrite(self.command_last_word_addr, command)
+        self.getFifoFreeSpace()
+        retval=self.readValue(7)
+        return retval
+
+    def getRSUStatus(self):
+        command = [0x07,0x00,0x00,0x5B]
+        self.spi.systemAccessWrite(self.command_last_word_addr, command)
+        self.getFifoFreeSpace()
+        retval=self.readValue(10)
+        return retval
+    
+    def getCoreTemps(self):
+        command = [0x02, 0x00, 0x10,  0x19]
+        print('getting temp..')
+        self.spi.systemAccessWrite(self.command_addr, command)
+        self.spi.systemAccessWrite(self.command_last_word_addr, [0x00, 0x01, 0x00, 0x3C]) 
+        #self.getFifoFreeSpace()
+                
+        retval = self.readValue(5)[1:4]
+        temps=[]
+        for i in range(len(retval)):
+            val = (0xFF & retval[i][5]) | ((0xFF & retval[i][4]) << 8) | ((0xFF & retval[i][3]) << 16)
+            temps.append(val * 1./256)
+        return temps
+
+    def qspiEraseApplicationImage(self, address, num_sectors):
+        #erase 64KB sectors at a time
+        #####
+        self.qspiOpen()
+        self.qspiChipSelect()
+        command = [0x0B,0x00,0x20,0x38]
+        current_address = address
+        print('erasing application image...')
+        for i in range(num_sectors):
+
+            #print(current_address)
+            self.spi.systemAccessWrite(self.command_addr, command) #header
+            self.spi.systemAccessWrite(self.command_addr, current_address)#first data word, offset address, 64KB-aligned
+            self.spi.systemAccessWrite(self.command_last_word_addr, [0x00,0x04,0x00,0x00]) #erase 64KB sectors
+            self.readValue(1) #flush header readback
+
+            current_address[1] = current_address[1] + 0x04
+            time.sleep(0.5)
+        print('done')
+        self.qspiClose()
+
+
+def dumpDidaqInfo(dev, filename='info_didaq.json'):
+
+    firmware_version = convertListToWord(dev.spi.getFwVersion())
+    chip_id = dev.getChipID()
+    jtag_id = dev.getID()
+    core_temps = dev.getCoreTemps()
+    config_stat = dev.getConfigStatus()
+    _config_err = convertListToWord(config_stat[1])
+    _quart_version = str(config_stat[2][3])+'.'+str(config_stat[2][4])+'.'+str(config_stat[2][5])
+    
+    rsu_stat = dev.getRSUStatus()
+    _running_fw_offset_addr = hex(convertListToWord(rsu_stat[1]))
+    _failing_fw_image_addr = hex(convertListToWord(rsu_stat[3]))
+    _rsu_state_error = [rsu_stat[5],rsu_stat[6]]
+    
+    info_dict={}
+    info_dict['fw_ver']=hex(firmware_version)
+    info_dict['ids']=[hex(chip_id), hex(jtag_id)]
+    info_dict['temps']=core_temps
+    info_dict['config_err']=_config_err
+    info_dict['quartus_ver']=_quart_version
+    info_dict['running_fw_addr']=_running_fw_offset_addr
+    info_dict['failing_fw_addr']=_failing_fw_image_addr
+    info_dict['rsu_state_error']=_rsu_state_error
+    
+    with open(filename, 'w') as f:
+        json.dump(info_dict, f)
+
+
+def convertListToWord(byte_list):
+    '''4byte list to 32bit word, note spi read returns 6 bytes, first two are 0x00'''
+    word = (byte_list[2] << 24) | (byte_list[3] << 16) | (byte_list[4] << 8) | byte_list[5]
+    return word
+        
+
+if __name__=="__main__":
+
+    didaq = Didaq()
+    print('fw_version:', didaq.getFwVersion())
+    #print('board_version:', didaq.getBoardVersion()[3])
+
+    sdm = SDM_SPI()
+
+    #sdm.reconfigure()
+    print(sdm.getCoreTemps())
+    #sdm.qspiEraseApplicationImage(sdm.fw_application_addr,23)
+    dumpDidaqInfo(sdm)
+
+
+
+
