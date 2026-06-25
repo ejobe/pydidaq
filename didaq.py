@@ -98,10 +98,10 @@ class SDM_SPI:
         self.base_addr = 0x010C0000 #Mailbox client IP memory-mapped based address
         self.command_addr = self.base_addr | 0x0
         self.command_last_word_addr = self.base_addr | 0x4 #byte address
-        self.readValue(16) #flush
         self.CPB0_offset_addr = [0x00,0x78,0x00,0x00]
         self.CPB1_offset_addr = [0x00,0x78,0x80,0x00]
         self.FIFO_LENGTH = 256
+        self.readValue(16) #flush
         if fw_application_addr == None:
             self.fw_application_addr = [0x01,0x00,0x00,0x00]
         else:
@@ -120,6 +120,7 @@ class SDM_SPI:
         for i in range(num_words):
             time.sleep(0.01) #this is stupid but needed, probably can check that the write/rd request system register is cleared
             retval.append(self.spi.systemAccessRead(header_addr))
+        
         return retval
 
     def getErrorCode(self, response_header):
@@ -208,7 +209,7 @@ class SDM_SPI:
     def qspiRead(self, address, num_words):
         #SDM mailbox FIFO is 256 words limited
         ##########
-        _num_words = 0xF & num_words
+        _num_words = 0xFF & num_words
         self.qspiOpen()
         self.qspiChipSelect()
         command = [0x0C,0x00,0x20,0x3A]
@@ -216,7 +217,9 @@ class SDM_SPI:
         self.spi.systemAccessWrite(self.command_addr, address)
         self.spi.systemAccessWrite(self.command_last_word_addr, [0x00,0x00,0x00,_num_words])
 
+        time.sleep(0.2)
         retval = self.readValue(_num_words+1)
+        self.qspiClose()
         return retval
 
     def qspiWrite(self, address, data):
@@ -236,34 +239,31 @@ class SDM_SPI:
         else:
             self.spi.systemAccessWrite(self.command_last_word_addr, data[0])
 
+        time.sleep(0.2)
         retval = self.readValue(1)
+        self.qspiClose()
         return retval
                                        
-    def qspiEraseApplicationImage(self, address, num_sectors):
+    def qspiEraseSector(self, address):
         #erase 64KB sectors at a time
         # add check to avoid erasure of any offset addresses less than first application image
         #####
-        if convertListToWord(address) < convertListToWord(self.CPB1_offset_addr):
+        if convertListToWord(address, spibytes=False) < convertListToWord(self.CPB1_offset_addr, spibytes=False):
             print('do not erase here, nothing was done')
             return 1
 
         self.qspiOpen()
         self.qspiChipSelect()
         command = [0x0B,0x00,0x20,0x38]
-        current_address = address
-        print('erasing application image...')
-        for i in range(num_sectors):
-
-            #print(current_address)
-            self.spi.systemAccessWrite(self.command_addr, command) #header
-            self.spi.systemAccessWrite(self.command_addr, current_address)#first data word, offset address, 64KB-aligned
-            self.spi.systemAccessWrite(self.command_last_word_addr, [0x00,0x04,0x00,0x00]) #erase 64KB sectors
-            self.readValue(1) #flush header readback
-
-            current_address[1] = current_address[1] + 0x04
-            time.sleep(0.5)
-        print('done')
+        
+        self.spi.systemAccessWrite(self.command_addr, command) #header
+        self.spi.systemAccessWrite(self.command_addr, address)#first data word, offset address, 64KB-aligned
+        self.spi.systemAccessWrite(self.command_last_word_addr, [0x00,0x00,0x40,0x00]) #erase 64KB sectors
+        time.sleep(0.2) #erase time buffer for flash
+        retval=self.readValue(1) #flush header readback
+        
         self.qspiClose()
+        return retval
 
 def dumpDidaqInfo(dev, filename='info_didaq.json'):
 
@@ -302,11 +302,19 @@ def dumpDidaqInfo(dev, filename='info_didaq.json'):
         json.dump(info_dict, f)
 
 
-def convertListToWord(byte_list):
+def convertListToWord(byte_list,spibytes=True):
     '''4byte list to 32bit word, note spi read returns 6 bytes, first two are 0x00'''
-    word = (byte_list[2] << 24) | (byte_list[3] << 16) | (byte_list[4] << 8) | byte_list[5]
+    if spibytes:
+        word = (byte_list[2] << 24) | (byte_list[3] << 16) | (byte_list[4] << 8) | byte_list[5]
+    else:
+        word = (byte_list[0] << 24) | (byte_list[1] << 16) | (byte_list[2] << 8) | byte_list[3]
     return word
-        
+
+def convertWordToList(word):
+    '''32bit word to big endien 4-byte list'''
+    byte_list = [(word & 0xFF000000) >> 24, (word & 0x00FF0000) >> 16, (word & 0x0000FF00) >> 8, (word & 0x000000FF)]
+    return byte_list
+
 
 if __name__=="__main__":
 
