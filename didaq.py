@@ -99,8 +99,11 @@ class SDM_SPI:
         self.command_addr = self.base_addr | 0x0
         self.command_last_word_addr = self.base_addr | 0x4 #byte address
         self.readValue(16) #flush
+        self.CPB0_offset_addr = [0x00,0x78,0x00,0x00]
+        self.CPB1_offset_addr = [0x00,0x78,0x80,0x00]
+        self.FIFO_LENGTH = 256
         if fw_application_addr == None:
-            self.fw_application_addr = [0x00,0x78,0x00,0x00]
+            self.fw_application_addr = [0x01,0x00,0x00,0x00]
         else:
             self.fw_application_addr = fw_application_addr
             
@@ -202,9 +205,48 @@ class SDM_SPI:
             temps.append(val * 1./256)
         return temps
 
+    def qspiRead(self, address, num_words):
+        #SDM mailbox FIFO is 256 words limited
+        ##########
+        _num_words = 0xF & num_words
+        self.qspiOpen()
+        self.qspiChipSelect()
+        command = [0x0C,0x00,0x20,0x3A]
+        self.spi.systemAccessWrite(self.command_addr, command) #header
+        self.spi.systemAccessWrite(self.command_addr, address)
+        self.spi.systemAccessWrite(self.command_last_word_addr, [0x00,0x00,0x00,_num_words])
+
+        retval = self.readValue(_num_words+1)
+        return retval
+
+    def qspiWrite(self, address, data):
+        #SMD mailbox FIFO limited to 256 words
+        #data in an array of 4-byte lists
+        ####
+        self.qspiOpen()
+        self.qspiChipSelect()
+        cmd_length = len(data) + 2
+        command = [0x0D,0x00,0x00 | ((cmd_length & 0xF) << 4),0x39]
+        self.spi.systemAccessWrite(self.command_addr, command)
+        self.spi.systemAccessWrite(self.command_addr, address)
+        if len(data) > 1:
+            for i in range(cmd_length-3):
+                self.spi.systemAccessWrite(self.command_addr, data[i])
+            self.spi.systemAccessWrite(self.command_last_word_addr, data[-1])
+        else:
+            self.spi.systemAccessWrite(self.command_last_word_addr, data[0])
+
+        retval = self.readValue(1)
+        return retval
+                                       
     def qspiEraseApplicationImage(self, address, num_sectors):
         #erase 64KB sectors at a time
+        # add check to avoid erasure of any offset addresses less than first application image
         #####
+        if convertListToWord(address) < convertListToWord(self.CPB1_offset_addr):
+            print('do not erase here, nothing was done')
+            return 1
+
         self.qspiOpen()
         self.qspiChipSelect()
         command = [0x0B,0x00,0x20,0x38]
@@ -223,7 +265,6 @@ class SDM_SPI:
         print('done')
         self.qspiClose()
 
-
 def dumpDidaqInfo(dev, filename='info_didaq.json'):
 
     firmware_version = convertListToWord(dev.spi.getFwVersion())
@@ -233,6 +274,12 @@ def dumpDidaqInfo(dev, filename='info_didaq.json'):
     config_stat = dev.getConfigStatus()
     _config_err = convertListToWord(config_stat[1])
     _quart_version = str(config_stat[2][3])+'.'+str(config_stat[2][4])+'.'+str(config_stat[2][5])
+
+    _appl_img_addr = dev.CPB0_offset_addr
+    _appl_img_addr[3] = 0x20
+    application_image0_addr = convertListToWord(dev.qspiRead(_appl_img_addr, 1)[1])
+    _appl_img_addr[3] = 0x28
+    application_image1_addr = convertListToWord(dev.qspiRead(_appl_img_addr, 1)[1])
     
     rsu_stat = dev.getRSUStatus()
     _running_fw_offset_addr = hex(convertListToWord(rsu_stat[1]))
@@ -248,6 +295,8 @@ def dumpDidaqInfo(dev, filename='info_didaq.json'):
     info_dict['running_fw_addr']=_running_fw_offset_addr
     info_dict['failing_fw_addr']=_failing_fw_image_addr
     info_dict['rsu_state_error']=_rsu_state_error
+    info_dict['application0_pointer_addr']=hex(application_image0_addr)
+    info_dict['application1_pointer_addr']=hex(application_image1_addr)
     
     with open(filename, 'w') as f:
         json.dump(info_dict, f)
