@@ -93,7 +93,7 @@ class Didaq:
 # class to interface to the secure device manager on the Agilex FPGA
 # via the memory-mapped interface over SPI
 class SDM_SPI:
-    def __init__(self, fw_application_addr=None):
+    def __init__(self):
         self.spi = Didaq()
         self.base_addr = 0x010C0000 #Mailbox client IP memory-mapped based address
         self.command_addr = self.base_addr | 0x0
@@ -102,10 +102,6 @@ class SDM_SPI:
         self.CPB1_offset_addr = [0x00,0x78,0x80,0x00]
         self.FIFO_LENGTH = 256
         self.readValue(16) #flush
-        if fw_application_addr == None:
-            self.fw_application_addr = [0x01,0x00,0x00,0x00]
-        else:
-            self.fw_application_addr = fw_application_addr
             
     def getFifoFreeSpace(self):
         header_addr = self.base_addr | (0x02 << self.spi.BYTE_ADDRESS_BITSHIFT)
@@ -126,7 +122,9 @@ class SDM_SPI:
     def getErrorCode(self, response_header):
         #eventually enumerate the potential errors...
         if response_header[-1] != 0x00:
-            print('error')
+            return 1
+        else:
+            return 0
         
     def getID(self):
         command = [0x05, 0x00, 0x00,  0x10]
@@ -167,11 +165,11 @@ class SDM_SPI:
         retval=self.readValue(1) #flush header response word
         self.getErrorCode(retval[0])
         
-    def reconfigure(self):
+    def reconfigure(self, application_offset_address):
         command = [0x01, 0x00, 0x20,  0x5C]
         print('reconfigure..')
         self.spi.systemAccessWrite(self.command_addr, command)
-        self.spi.systemAccessWrite(self.command_addr, self.fw_application_addr) #address [31:0], from programming file generation
+        self.spi.systemAccessWrite(self.command_addr, convertWordToList(application_offset_address)) #address [31:0], from programming file generation
         self.getFifoFreeSpace()
         self.spi.systemAccessWrite(self.command_last_word_addr, [0x00, 0x00, 0x00, 0x00]) #address[63:32]-should be all 0's
 
@@ -229,9 +227,11 @@ class SDM_SPI:
         self.qspiOpen()
         self.qspiChipSelect()
         cmd_length = len(data) + 2
-        command = [0x0D,0x00,0x00 | ((cmd_length & 0xF) << 4),0x39]
-        self.spi.systemAccessWrite(self.command_addr, command)
-        self.spi.systemAccessWrite(self.command_addr, address)
+        #print('qspiWrite length',cmd_length)
+        command = [0x0D,0x00 | ((cmd_length & 0xF0) >> 4),0x00 | ((cmd_length & 0xF) << 4),0x39]
+        self.spi.systemAccessWrite(self.command_addr, command) #write header
+        self.spi.systemAccessWrite(self.command_addr, address) #write flash address offet
+        self.spi.systemAccessWrite(self.command_addr, [0x00, 0x00, 0x00, 0xFF & len(data)])
         if len(data) > 1:
             for i in range(cmd_length-3):
                 self.spi.systemAccessWrite(self.command_addr, data[i])
@@ -239,7 +239,7 @@ class SDM_SPI:
         else:
             self.spi.systemAccessWrite(self.command_last_word_addr, data[0])
 
-        time.sleep(0.2)
+        time.sleep(0.01)
         retval = self.readValue(1)
         self.qspiClose()
         return retval
@@ -324,9 +324,7 @@ if __name__=="__main__":
 
     sdm = SDM_SPI()
 
-    #sdm.reconfigure()
     print(sdm.getCoreTemps())
-    #sdm.qspiEraseApplicationImage(sdm.fw_application_addr,23)
     dumpDidaqInfo(sdm)
 
 
