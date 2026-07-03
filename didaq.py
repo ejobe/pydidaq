@@ -16,7 +16,7 @@ class Didaq:
     def __init__(self, dev='/dev/spidev1.0'):
         self.spi = spidev.SpiDev()
         self.spi.open_path(dev)
-        self.spi.max_speed_hz = 10000000
+        self.spi.max_speed_hz = 20000000
         self.spi.mode = 0b01
         self.BYTE_ADDRESS_BITSHIFT=2 ##for system memory map access
         
@@ -33,23 +33,28 @@ class Didaq:
         return retval
 
     def write(self, address, data):
+        if len(data) != 4:
+            print('spi write failed, data word needs to be list of 4 bytes')
+            return 1
+        #print('write', hex(address))
         self.spiXfer(rw=0, address_word=address, data_word=data)
 
     def read(self, address):
+        #print('read', hex(address))
         retval=self.spiXfer(rw=1, address_word=address, data_word=[0x00,0x00,0x00,0x00])
         return retval
 
     def getFwVersion(self):
-        self.version = self.read(address=0x0000)
+        self.version = self.read(address=0x0000)[2:]
         return self.version
     
     def getBoardVersion(self):
-        self.version = self.read(address=0x0001)
+        self.version = self.read(address=0x0001)[2:]
         return self.version
     
     def enableADCPowerRegs(self, enable=True):
         addr = 0x0034
-        regval = self.read(addr)
+        regval = self.read(addr)[2:]
         print(regval)
         if enable == True:
             regval[3] = regval[3] | 0x30
@@ -62,8 +67,8 @@ class Didaq:
    
     def enableCalPulse(self, enable=True):
         addr = 0x0034
-        regval = self.read(addr)
-        print(regval)
+        regval = self.read(addr)[2:]
+        print('misc register',regval)
         if enable == True:
             regval[3] = regval[3] | 0x0F
             self.write(addr, regval)
@@ -114,7 +119,7 @@ class SDM_SPI:
         header_addr = self.base_addr | (0x05 << self.spi.BYTE_ADDRESS_BITSHIFT)
         retval=[]  
         for i in range(num_words):
-            time.sleep(0.01) #this is stupid but needed, probably can check that the write/rd request system register is cleared
+            time.sleep(0.005) #this is stupid but needed, probably can check that the write/rd request system register is cleared
             retval.append(self.spi.systemAccessRead(header_addr))
         
         return retval
@@ -192,7 +197,7 @@ class SDM_SPI:
     
     def getCoreTemps(self):
         command = [0x02, 0x00, 0x10,  0x19]
-        print('getting temp..')
+        #print('getting temp..')
         self.spi.systemAccessWrite(self.command_addr, command)
         self.spi.systemAccessWrite(self.command_last_word_addr, [0x00, 0x01, 0x00, 0x3C]) 
         #self.getFifoFreeSpace()
@@ -239,7 +244,7 @@ class SDM_SPI:
         else:
             self.spi.systemAccessWrite(self.command_last_word_addr, data[0])
 
-        time.sleep(0.01)
+        time.sleep(0.002)
         retval = self.readValue(1)
         self.qspiClose()
         return retval
@@ -267,7 +272,9 @@ class SDM_SPI:
 
 def dumpDidaqInfo(dev, filename='info_didaq.json'):
 
-    firmware_version = convertListToWord(dev.spi.getFwVersion())
+    _fw_version = dev.spi.getFwVersion()
+    firmware_date = str((_fw_version[0] << 4) | ((_fw_version[1] & 0xF0) >> 4))+'.'+str(_fw_version[1] & 0x0F)
+    firmware_version = str((_fw_version[3] & 0xF0)>>4)+str('.')+str(_fw_version[3] & 0x0F)
     chip_id = dev.getChipID()
     jtag_id = dev.getID()
     core_temps = dev.getCoreTemps()
@@ -287,7 +294,7 @@ def dumpDidaqInfo(dev, filename='info_didaq.json'):
     _rsu_state_error = [rsu_stat[5],rsu_stat[6]]
     
     info_dict={}
-    info_dict['fw_ver']=hex(firmware_version)
+    info_dict['fw_ver']=[firmware_date, firmware_version]
     info_dict['ids']=[hex(chip_id), hex(jtag_id)]
     info_dict['temps']=core_temps
     info_dict['config_err']=_config_err

@@ -48,17 +48,20 @@ def writeImage(dev, filename, erase=True):
 
             qspi_address = TARGET_START_ADDR + WRITE_BYTES_PER_TRANSACTION * i ##byte address
             write_chunk = []
-
+            chunk = bin_file.read(512)
+            
             ##each write cycle has 128 words written to QSPI via the SDM mailbox
             for j in range(128):
-                _word = bin_file.read(4)
-                write_chunk.append([_word[3],_word[2],_word[1],_word[0]])
-
+                #_word = bin_file.read(4)
+                #write_chunk.append([_word[3],_word[2],_word[1],_word[0]])
+                write_chunk.append([chunk[j*4+3],chunk[j*4+2],chunk[j*4+1],chunk[j*4]])
+                
             retval=dev.qspiWrite(didaq.convertWordToList(qspi_address), write_chunk)
             if dev.getErrorCode(retval[0]) == 1:
                 print('error',i,num_write_cycles,hex(qspi_address),len(write_chunk),write_chunk[0],retval,0x0D)
 
-        print('.... done with image write')
+        elapsed_time = time.time() - start_time
+        print('.... done with image write, in', int(elapsed_time), 'seconds')
         
 
 
