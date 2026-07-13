@@ -1,4 +1,5 @@
 import didaq_debug
+import didaq_data
 import time
 
 class ADCconfig:
@@ -257,7 +258,6 @@ class ADCconfig:
             #set to offset binary
             self.writeReg(0x0204, 0x01) 
 
-
         #another device loop for re-starting jesd links
         for i in range(self.num_adcs):
             self.adcSpiBusSel(i)
@@ -277,14 +277,12 @@ class ADCconfig:
 
         print(self.jesd_stat)
 
-if __name__=='__main__':
-    import didaq_data
-    import time
-
-    jesd = didaq_data.didaqJESD()
+def run():
+    jesd = didaq_data.didaqJESD()		
     jesd.jesdRxEn(False)
-    
+    time.sleep(1)
     print('configuring ADCs..')
+ 
     adc_config=ADCconfig()
     adc_config.configureADC(0x00, sampling_rate=1.0, pll_en=True)
 
@@ -295,8 +293,12 @@ if __name__=='__main__':
     print('jesd status ([0,255,255,255] is good) :: ', jesd.jesdStatus())
 
     for i in range(6):
-    	adc_config.adcSpiBusSel(i)
-    	adc_config.sysRef(True)
+        adc_config.adcSpiBusSel(i)
+        adc_config.sysRef(True)
+
+    print('enabling sysref..done')
     
-    #adc_config.modeJTest(7)
+if __name__=='__main__':
+
+    run()
     
