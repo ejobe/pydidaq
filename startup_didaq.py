@@ -47,6 +47,9 @@ while((not align) or (tries > 3)):
 
     tries=tries+1
     
+if tries > 3:
+    print('maybe some issue')
+
 print('----------------------')
 print('didaq setup done')
 print('----------------------')
