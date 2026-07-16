@@ -1,0 +1,1 @@
+{"fw_ver": ["2026.7", "2.14"], "ids": ["0x8cca27304756eeca", "0x364f0dd"], "temps": [40.375, 40.375, 39.25], "config_err": 0, "quartus_ver": "25.1.1", "running_fw_addr": "0x1000000", "failing_fw_addr": "0x0", "rsu_state_error": [[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 2, 2]], "application0_pointer_addr": "0x1000000", "application1_pointer_addr": "0x800000"}

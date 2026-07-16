@@ -1,1 +1,0 @@
-{"fw_ver": "0xe300002c", "ids": ["0xcd43168507803877", "0x364f0dd"], "temps": [23.25, 23.125, 22.75], "config_err": 0, "quartus_ver": "25.1.1", "running_fw_addr": "0x210000", "failing_fw_addr": "0x780000", "rsu_state_error": [[0, 0, 240, 4, 208, 3], [0, 0, 13, 207, 2, 2]]}

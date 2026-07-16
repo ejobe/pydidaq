@@ -44,15 +44,17 @@ class didaqJESD:
         regval=self.fpga.read(header_addr)
         return regval
     
-    def getMetaData(self):
+    def getMetaData(self, verbose=False):
         regval=self.fpga.read(0x0000)
-        print('fw ver: ',regval)
+        if verbose:
+            print('fw ver: ',regval)
 
         for i in range(8):
             offset_addr = (0x0052 + i)
             header_addr = offset_addr
             regval=self.fpga.read(header_addr)
-            print(hex(header_addr), regval)
+            if verbose:
+                print(hex(header_addr), regval)
 
     def ramRead(self, channel):
         header_addr = 0x0014 + channel
@@ -60,36 +62,35 @@ class didaqJESD:
         for i in range(512):
             _data = self.fpga.read(header_addr)
             data.extend(_data)
-        print(hex(header_addr), hex(data[20]))
+        #print(hex(header_addr), hex(data[20]))
         return(data)
-    
 
-if __name__=='__main__':
-    #import matplotlib.pyplot as plt
-    #import didaq_rf_trig as trigger
-
-    acq = didaqJESD()
-    acq.fpga.enableCalPulse(False)
+def takeEvent(cal_pulse=False, filename='test.txt'):
+    acq=didaqJESD()
+    acq.fpga.enableCalPulse(cal_pulse)
 
     print('jesd status',acq.jesdStatus())
-
+    
     acq.resetAcq(True)
     time.sleep(0.1)
     acq.softTrig()
     print('acq status',acq.acqStatus())
     acq.getMetaData()
     print('acq status',acq.acqStatus())
-    #acq.resetAcq()
 
-    #fig, ax = plt.subplots(10, sharex=True)
     all_data=[]
     for i in range(24):
         data=acq.ramRead(i)
         all_data.append(data)
-        #ax[i].plot(numpy.array(data) , 'o-', color='black')
-        #ax[i].set_ylabel('adu')
-        #ax[i].set_ylim([100, 150])
-        
-    numpy.savetxt('test.txt', numpy.array(all_data))	
+    
+    numpy.savetxt(filename, numpy.array(all_data))
     acq.fpga.enableCalPulse(False)
     acq.resetAcq()
+
+    return numpy.array(all_data)
+
+if __name__=='__main__':
+    
+    takeEvent(True)
+
+    
