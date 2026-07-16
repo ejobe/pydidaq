@@ -16,11 +16,11 @@ time.sleep(1)
 
 align=False
 tries=0
-while((not align) or (tries > 3)):
+while((not align) and (tries < 3)):
 
     didaq_sdm = didaq.SDM_SPI()
     didaq_sdm.reconfigure(0x01000000)
-    time.sleep(2)
+    time.sleep(3)
 
     didaq.dumpDidaqInfo(didaq_sdm, directory+'info_didaq.json')
     with open(directory+'info_didaq.json', 'r') as f:
@@ -31,17 +31,18 @@ while((not align) or (tries > 3)):
     print('starting up ADC and data')
 
     time.sleep(1)
-    
     adc_config.run()
+    time.sleep(5)
     dat = didaq_data_spi.takeEvent(cal_pulse=True, filename=directory+'aligntest.dat')
 
     align_vector=[]
     for i in range(24):
-        align_vector.append(numpy.where(dat[i,100:] > 135)[0][0])
+        align_vector.append(numpy.where(dat[i,100:] > 136)[0][0])
 
     print('edges:', align_vector)
-    all_edges_identical = (align_vector == align_vector[0]).all()
-
+    #all_edges_identical = (align_vector == align_vector[0]).all()
+    all_edges_identical = numpy.all(numpy.abs(align_vector-align_vector[0]) <=1)
+    
     if all_edges_identical:
         align=True
 
