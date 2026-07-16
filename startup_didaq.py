@@ -18,6 +18,10 @@ align=False
 tries=0
 while((not align) and (tries < 3)):
 
+    time.sleep(1)
+    adc_config.off()
+    time.sleep(1)
+    
     didaq_sdm = didaq.SDM_SPI()
     didaq_sdm.reconfigure(0x01000000)
     time.sleep(3)
@@ -48,7 +52,7 @@ while((not align) and (tries < 3)):
 
     tries=tries+1
     
-if tries > 3:
+if tries >= 3:
     print('maybe some issue')
 
 print('----------------------')

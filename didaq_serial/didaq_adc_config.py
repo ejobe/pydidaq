@@ -277,6 +277,12 @@ class ADCconfig:
 
         print(self.jesd_stat)
 
+def off():
+    jesd=didaq_data.didaqJESD()
+    jesd.jesdRxEn(False)
+    adc_config=ADCconfig()
+    adc_config.fpga.enableADCPowerRegs(True)    
+    
 def run():
     jesd = didaq_data.didaqJESD()		
     jesd.jesdRxEn(False)
