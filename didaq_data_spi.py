@@ -91,6 +91,6 @@ def takeEvent(cal_pulse=False, filename='test.txt'):
 
 if __name__=='__main__':
     
-    takeEvent(True)
+    takeEvent(False)
 
     

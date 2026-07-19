@@ -1,4 +1,4 @@
-import didaq_debug
+import didaq_serial.didaq_debug as didaq_debug
 import time
 
 #useful FPGA i2c host registers

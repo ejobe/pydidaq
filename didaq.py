@@ -16,7 +16,7 @@ class Didaq:
     def __init__(self, dev='/dev/spidev1.0'):
         self.spi = spidev.SpiDev()
         self.spi.open_path(dev)
-        self.spi.max_speed_hz = 20000000
+        self.spi.max_speed_hz = 5000000
         self.spi.mode = 0b01
         self.BYTE_ADDRESS_BITSHIFT=2 ##for system memory map access
         

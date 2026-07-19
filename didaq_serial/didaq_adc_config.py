@@ -1,5 +1,5 @@
-import didaq_debug
-import didaq_data
+import didaq_serial.didaq_debug as didaq_debug
+import didaq_serial.didaq_data as didaq_data
 import time
 
 class ADCconfig:
