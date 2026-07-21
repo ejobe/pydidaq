@@ -1,3 +1,5 @@
+#! /usr/bin/env python3
+
 import didaq_serial.didaq_i2c as didaq_i2c
 import didaq_serial.didaq_adc_config as adc_config
 import time
