@@ -2,6 +2,7 @@
 import time
 import spidev
 import json
+import fnctl
 
 READ_BYTE=0x01
 WRITE_BYTE=0x02
@@ -16,12 +17,23 @@ class Didaq:
     def __init__(self, dev='/dev/spidev1.0'):
         self.spi = spidev.SpiDev()
         self.spi.open_path(dev)
+
+        # grab file lock on spi fd
+        while True:
+            try:
+                fcntl.flock(self.spi.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                print ('spi file lock is being held. Trying again in 3 seconds')
+                time.sleep(3)
+
         self.spi.max_speed_hz = 5000000
         self.spi.mode = 0b01
         self.BYTE_ADDRESS_BITSHIFT=2 ##for system memory map access
-        
+
     def __del__(self):
-        self.spi.close()
+        self.spi.close()  # this should clear the filelock
+
 
     def spiXfer(self, rw, address_word, data_word):
         '''
