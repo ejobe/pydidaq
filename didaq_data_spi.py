@@ -61,7 +61,7 @@ class didaqJESD:
         data=[]
         for i in range(512):
             _data = self.fpga.read(header_addr)
-            data.extend(_data)
+            data.extend(_data[2:])
         #print(hex(header_addr), hex(data[20]))
         return(data)
 
