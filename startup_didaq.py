@@ -43,7 +43,7 @@ while((not align) and (tries < 3)):
 
     align_vector=[]
     for i in range(24):
-        align_vector.append(numpy.where(dat[i,100:] > 136)[0][0])
+        align_vector.append(numpy.where(dat[i,100:] < 122)[0][0])
 
     print('edges:', align_vector)
     #all_edges_identical = (align_vector == align_vector[0]).all()
