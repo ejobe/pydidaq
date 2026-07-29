@@ -7,8 +7,10 @@ import numpy
 import didaq #spi-interface
 import didaq_data_spi
 import json
+import os
 
-directory = 'info/'
+
+directory = 'info/' if "DIDAQ_INFO_DIR" not in os.environ else os.environ['DIDAQ_INFO_DIR'] + '/'
 
 print('starting didaq.... if hangs for more than 5 sec at start may need to do a USBHUB_RESET via the console ')
 
