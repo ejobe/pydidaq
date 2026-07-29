@@ -1,6 +1,8 @@
 import didaq_serial.didaq_debug as didaq_debug
 import didaq_serial.didaq_data as didaq_data
 import time
+import sys
+import argparse
 
 class ADCconfig:
     #useful adc09qj1300 config registers [two bytes]
@@ -178,7 +180,7 @@ class ADCconfig:
         self.writeReg(0x0205, 0x1F & mode)
         self.writeReg(0x0200, 0x01)
 
-    def configureADC(self, pd_mask, low_power_mode=True, sampling_rate=1, pll_en=False):
+    def configureADC(self, pd_mask, low_power_mode=True, sampling_rate=1, pll_en=False, adc_fs_ranges = None):
         '''following procedure in section 7.2.2 in datasheet, for didaq application
         '''
         #turn off adc_regulator rails
@@ -208,7 +210,7 @@ class ADCconfig:
                 _init_done = self.readReg(self.adc09_reg_map['adr_initstat'])[0]
          
 	       
-            self.adcVertRangeSetting(0xFFFF)
+            self.adcVertRangeSetting(0xffff if adc_fs_ranges is None else adc_fs_ranges[i] )
 
             ####progam c-pll
             #reset c-pll
@@ -283,14 +285,14 @@ def off():
     adc_config=ADCconfig()
     adc_config.fpga.enableADCPowerRegs(True)    
     
-def run():
+def run(*, pd_mask = 0x00, adc_fsranges = None ):
     jesd = didaq_data.didaqJESD()		
     jesd.jesdRxEn(False)
     time.sleep(1)
     print('configuring ADCs..')
  
     adc_config=ADCconfig()
-    adc_config.configureADC(0x00, sampling_rate=1.0, pll_en=True)
+    adc_config.configureADC( pd_mask, sampling_rate=1.0, pll_en=True, adc_fsranges = adc_fsranges))
 
     print('locking JESD links..')
     print('jesd status: ', jesd.jesdStatus())
@@ -305,6 +307,17 @@ def run():
     print('enabling sysref..done')
     
 if __name__=='__main__':
+    pd_mask = 0x0
+    adc_fs_range = None
 
-    run()
+    parser = argparse.ArgumentParser('didaq_adc_config')
+    parser.add_argument('-p,--pd-mask', type = lambda x: int(x,16), help='pd mask (hex)')
+    parser.add_argument('-f,--fs-range', type = int , nargs=6, meta_var=('adc0','adc1','adc2','adc3','adc4','adc5'),  help='pd mask (hex)')
+
+    args = parser.parse_args()
+    if (args.pd_mask) pd_mask = args.pd_mask
+    if (args.fs_range) adc_fs_range = args.fs_range
+    
+
+    run(pd_mask, adc_fs_range)
     
