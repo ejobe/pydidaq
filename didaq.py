@@ -2,7 +2,7 @@
 import time
 import spidev
 import json
-import fnctl
+import fcntl
 
 READ_BYTE=0x01
 WRITE_BYTE=0x02
