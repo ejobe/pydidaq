@@ -41,6 +41,7 @@ while((not align) and (tries < 3)):
     time.sleep(1)
     adc_config.run()
     time.sleep(5)
+    dat_spit = didaq_data_spi.takeEvent(cal_pulse=True, filename=directory+'dump.dat')
     dat = didaq_data_spi.takeEvent(cal_pulse=True, filename=directory+'aligntest.dat')
 
     align_vector=[]
