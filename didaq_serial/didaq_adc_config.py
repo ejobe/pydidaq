@@ -180,7 +180,7 @@ class ADCconfig:
         self.writeReg(0x0205, 0x1F & mode)
         self.writeReg(0x0200, 0x01)
 
-    def configureADC(self, pd_mask, low_power_mode=True, sampling_rate=1, pll_en=False, adc_fs_ranges = None):
+    def configureADC(self, pd_mask, low_power_mode=True, sampling_rate=1, pll_en=False, adc_fs_ranges=None):
         '''following procedure in section 7.2.2 in datasheet, for didaq application
         '''
         #turn off adc_regulator rails
@@ -203,14 +203,14 @@ class ADCconfig:
             self.adcSpiBusSel(i)
             #reset device using soft reset
             self.writeReg(self.adc09_reg_map['adr_config_a'], 0x80)
+
             #confirm init_done bit goes hi
             _init_done = self.readReg(self.adc09_reg_map['adr_initstat'])[0]
             while(_init_done != 1):
                 #add a timeout here
                 _init_done = self.readReg(self.adc09_reg_map['adr_initstat'])[0]
 
-
-            self.adcVertRangeSetting(0xffff if adc_fs_ranges is None else adc_fs_ranges[i] )
+            self.adcVertRangeSetting(0xffff if adc_fs_ranges is None else adc_fs_ranges[i])
 
             ####progam c-pll
             #reset c-pll
@@ -285,14 +285,15 @@ def off():
     adc_config=ADCconfig()
     adc_config.fpga.enableADCPowerRegs(True)
 
-def run(pd_mask = 0x00, adc_fsranges = None ):
+def run(pd_mask=0x00, adc_fs_ranges=None):
     jesd = didaq_data.didaqJESD()
     jesd.jesdRxEn(False)
     time.sleep(1)
     print('configuring ADCs..')
 
     adc_config=ADCconfig()
-    adc_config.configureADC( pd_mask, sampling_rate=1.0, pll_en=True, adc_fs_ranges = adc_fsranges)
+    adc_config.configureADC(
+        pd_mask, sampling_rate=1.0, pll_en=True, adc_fs_ranges=adc_fs_ranges)
 
     print('locking JESD links..')
     print('jesd status: ', jesd.jesdStatus())
