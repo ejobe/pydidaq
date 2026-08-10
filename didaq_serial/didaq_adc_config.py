@@ -21,7 +21,7 @@ class ADCconfig:
         'adr_fsrange'      : 0x0030, #fs range for all channels
         'adr_alarmstat'    : 0x02C1,
         'adr_initstat'     : 0x0270}
-    
+
     # adc config/control registers on the FPGA fw
     #   [parallel/gpio control to ADC09xx pin]
     adc_fw_ctrl_reg_map = {
@@ -31,7 +31,7 @@ class ADCconfig:
         'adr_adc_caltrig': 0x30,
         'adr_adc_spisel' : 0x0D,
         'adr_adc_pdwn'   : 0x0C}
-    
+
     def __init__(self):
         #instance to host the ADC config SPI bus
         self.spi = didaq_debug.DidaqSPIHost()
@@ -84,20 +84,20 @@ class ADCconfig:
         '''current version, each ADC is config'ed sequentially thru its spi bus
              default/reset value is 0x00 - ADC_0
         '''
-        header_addr=[0x01,0x08,0x00,(self.adc_fw_ctrl_reg_map['adr_adc_spisel'] 
+        header_addr=[0x01,0x08,0x00,(self.adc_fw_ctrl_reg_map['adr_adc_spisel']
                                      << self.fpga.BYTE_ADDRESS_BITSHIFT)]
         self.fpga.write(header_addr, [[0x00,0x00,0x00, 0xFF & bus]])
         self.cur_adc = bus
 
     def adcPllEn(self, pll_en_mask):
         ''' set PLL_en gpio to high to use internal PLL
-              control left/right ADC banks separately: 
+              control left/right ADC banks separately:
                if ADC bank is off, probably best to keep this low
         '''
-        header_addr=[0x01,0x08,0x00,(self.adc_fw_ctrl_reg_map['adr_adc_pllen'] 
+        header_addr=[0x01,0x08,0x00,(self.adc_fw_ctrl_reg_map['adr_adc_pllen']
                                      << self.fpga.BYTE_ADDRESS_BITSHIFT)]
         self.fpga.write(header_addr, [[0x00,0x00,0x00, 0x3 & pll_en_mask]])
-    
+
     def adcPd(self, pd_mask):
         ''' adc powerdown control
         '''
@@ -134,25 +134,25 @@ class ADCconfig:
         self.writeReg(0x0030, range_setting & 0xFF00 >> 8) #write a 0
         self.writeReg(0x0031, range_setting & 0x00FF)
 
-        
+
     def adcPowerDownState(self):
         self.adcPllEn(0x0)
         self.fpga.enableADCPowerRegs(False)
         self.adcPd(0x00)
-        self.adcSyncSE(0) 
+        self.adcSyncSE(0)
 
     def adcAlarms(self, clear=False):
         ''' clear or read Alarm Status register
         '''
         if clear==True:
             self.writeReg(self.adc09_reg_map['adr_alarmstat'], 0x3F)
-        
+
         regval = self.readReg(self.adc09_reg_map['adr_alarmstat'])[0]
         return regval
 
     def getJesdStatus(self, clear=False):
         ''' read JESD stat register
-        '''        
+        '''
         if clear==True:
             self.writeReg(self.adc09_reg_map['adr_jesd_stat'], 0x00)
 
@@ -188,15 +188,15 @@ class ADCconfig:
         time.sleep(2) #let settle in case they were already on
         #set PLL enable, note that PLLREF_SE is pulled to gnd on board
         self.adcPllEn(0x3)
-        if pll_en == False: #debug only 
+        if pll_en == False: #debug only
             self.adcPllEn(0x0)
         #power on rails, while keeping PD low for ADCs to be configured
         self.adcPd(pd_mask)
         self.fpga.enableADCPowerRegs(True)
-        #configure clk [try to configure clock before this and see if it works 
+        #configure clk [try to configure clock before this and see if it works
         #   otherwise, insert pll_config instance
-        
-        #self.adcSyncSE(1) 
+
+        #self.adcSyncSE(1)
 
         #now loop through ADC devices to configure C-PLL
         for i in range(self.num_adcs):
@@ -208,8 +208,8 @@ class ADCconfig:
             while(_init_done != 1):
                 #add a timeout here
                 _init_done = self.readReg(self.adc09_reg_map['adr_initstat'])[0]
-         
-	       
+
+
             self.adcVertRangeSetting(0xffff if adc_fs_ranges is None else adc_fs_ranges[i] )
 
             ####progam c-pll
@@ -228,7 +228,7 @@ class ADCconfig:
             else:
                 print('no sampling rate set..')
             #set vco_cal_en to enable vco trim cal
-            self.writeReg(self.adc09_reg_map['adr_vco_cal_ctrl'],0x41) 
+            self.writeReg(self.adc09_reg_map['adr_vco_cal_ctrl'],0x41)
             #de-assert reset to start vco calibration and enable c-pll
             self.writeReg(self.adc09_reg_map['adr_cpll_reset'], 0x00)
             #set jesd_en to 0
@@ -242,9 +242,9 @@ class ADCconfig:
                 self.writeReg(0x029B, 0x00) #LOW_POWER3
                 self.writeReg(0x029C, 0x14) #LOW_POWER4
             #set the JMODE=2 (4-lanes, quad-mode @ 8bit w/ 8B/10B encoding)
-            self.writeReg(0x0201, 0x02) 
+            self.writeReg(0x0201, 0x02)
             #set the K-1 jesd value
-            self.writeReg(0x0202, 0x1F) 
+            self.writeReg(0x0202, 0x1F)
             #set sync_sel source, default value should be fine
             ##self.writeReg(0x0204, 0x03)
             #set calibration settings
@@ -258,7 +258,7 @@ class ADCconfig:
                 print('no c-pll lock for ADC ', i)
 
             #set to offset binary
-            self.writeReg(0x0204, 0x01) 
+            self.writeReg(0x0204, 0x01)
 
         #another device loop for re-starting jesd links
         for i in range(self.num_adcs):
@@ -270,12 +270,12 @@ class ADCconfig:
             _spll_locked = self.readReg(self.adc09_reg_map['adr_jesd_stat'])[0] & 0x4
             #foreground calibration on startup
             self.foregroundCalibration()
-        
+
         for i in range(self.num_adcs):
             self.adcSpiBusSel(i)
             #self.sysRef(True)
             self.getJesdStatus()
-            self.adcAlarms(True)       
+            self.adcAlarms(True)
 
         print(self.jesd_stat)
 
@@ -283,16 +283,16 @@ def off():
     jesd=didaq_data.didaqJESD()
     jesd.jesdRxEn(False)
     adc_config=ADCconfig()
-    adc_config.fpga.enableADCPowerRegs(True)    
-    
-def run(*, pd_mask = 0x00, adc_fsranges = None ):
-    jesd = didaq_data.didaqJESD()		
+    adc_config.fpga.enableADCPowerRegs(True)
+
+def run(pd_mask = 0x00, adc_fsranges = None ):
+    jesd = didaq_data.didaqJESD()
     jesd.jesdRxEn(False)
     time.sleep(1)
     print('configuring ADCs..')
- 
+
     adc_config=ADCconfig()
-    adc_config.configureADC( pd_mask, sampling_rate=1.0, pll_en=True, adc_fsranges = adc_fsranges))
+    adc_config.configureADC( pd_mask, sampling_rate=1.0, pll_en=True, adc_fs_ranges = adc_fsranges)
 
     print('locking JESD links..')
     print('jesd status: ', jesd.jesdStatus())
@@ -305,19 +305,19 @@ def run(*, pd_mask = 0x00, adc_fsranges = None ):
         adc_config.sysRef(True)
 
     print('enabling sysref..done')
-    
+
 if __name__=='__main__':
     pd_mask = 0x0
     adc_fs_range = None
 
     parser = argparse.ArgumentParser('didaq_adc_config')
-    parser.add_argument('-p,--pd-mask', type = lambda x: int(x,16), help='pd mask (hex)')
-    parser.add_argument('-f,--fs-range', type = int , nargs=6, meta_var=('adc0','adc1','adc2','adc3','adc4','adc5'),  help='pd mask (hex)')
+    parser.add_argument('-p','--pd_mask', type = lambda x: int(x,16), help='pd mask (hex)')
+    parser.add_argument('-f','--fs_range', type = int , nargs=6, metavar=('adc0','adc1','adc2','adc3','adc4','adc5'),  help='pd mask (hex)')
 
     args = parser.parse_args()
-    if (args.pd_mask) pd_mask = args.pd_mask
-    if (args.fs_range) adc_fs_range = args.fs_range
-    
+    if (args.pd_mask):
+        pd_mask = args.pd_mask
+    if (args.fs_range):
+        adc_fs_range = args.fs_range
 
     run(pd_mask, adc_fs_range)
-    
