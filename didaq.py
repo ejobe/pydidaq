@@ -22,7 +22,7 @@ class Didaq:
     def __init__(self, dev='/dev/spidev1.0'):
 
         if dev in didaqs:
-            return didaq[dev]
+            return didaqs[dev]
 
         self.spi = spidev.SpiDev()
         self.spi.open_path(dev)
