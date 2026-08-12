@@ -21,7 +21,7 @@ class Didaq:
     def __new__(cls, dev='/dev/spidev1.0', *args, **kwargs):
         if dev in cls._didaqs:
             return cls._didaqs[dev]
-        cls._didaqs[dev] = super().__new__(cls,dev)
+        cls._didaqs[dev] = super().__new__(dev)
 
     def __init__(self, dev='/dev/spidev1.0'):
 
