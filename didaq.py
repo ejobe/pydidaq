@@ -13,8 +13,17 @@ adr_fw_version = 0x00
 adr_board_version = 0x01
 adr_misc_ctrl  = 0x34
 
+# make didaq singleton per device
+# this means they never close for the duration of the oject, but oh well
+didaqs = {}
+
+
 class Didaq:
     def __init__(self, dev='/dev/spidev1.0'):
+
+        if dev in didaqs:
+            return didaq[dev]
+
         self.spi = spidev.SpiDev()
         self.spi.open_path(dev)
 
@@ -30,10 +39,8 @@ class Didaq:
         self.spi.max_speed_hz = 5000000
         self.spi.mode = 0b01
         self.BYTE_ADDRESS_BITSHIFT=2 ##for system memory map access
-
-    def __del__(self):
-        self.spi.close()  # this should clear the filelock
-
+        self.dev = dev
+        didaqs[dev] = self
 
     def spiXfer(self, rw, address_word, data_word):
         '''
