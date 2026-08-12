@@ -13,16 +13,16 @@ adr_fw_version = 0x00
 adr_board_version = 0x01
 adr_misc_ctrl  = 0x34
 
-# make didaq singleton per device
-# this means they never close for the duration of the oject, but oh well
-didaqs = {}
-
 
 class Didaq:
-    def __init__(self, dev='/dev/spidev1.0'):
+    _didaqs= {}
 
-        if dev in didaqs:
-            return didaqs[dev]
+    def __new__(cls, dev, *args, **kwargs):
+        if dev in cls._didaqs:
+            return cls._didaqs[dev]
+        cls._didaqs[dev] = super().__new__(cls)
+
+    def __init__(self, dev='/dev/spidev1.0'):
 
         self.spi = spidev.SpiDev()
         self.spi.open_path(dev)
@@ -40,7 +40,6 @@ class Didaq:
         self.spi.mode = 0b01
         self.BYTE_ADDRESS_BITSHIFT=2 ##for system memory map access
         self.dev = dev
-        didaqs[dev] = self
 
     def spiXfer(self, rw, address_word, data_word):
         '''
