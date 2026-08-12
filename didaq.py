@@ -17,12 +17,16 @@ adr_misc_ctrl  = 0x34
 class Didaq:
     _didaqs= {}
 
+# ensure we only have one didaq per device
     def __new__(cls, dev='/dev/spidev1.0', *args, **kwargs):
         if dev in cls._didaqs:
             return cls._didaqs[dev]
-        cls._didaqs[dev] = super().__new__(cls)
+        cls._didaqs[dev] = super().__new__(cls,dev)
 
     def __init__(self, dev='/dev/spidev1.0'):
+
+        if hasattr(self, "_initialized"):
+            return
 
         self.spi = spidev.SpiDev()
         self.spi.open_path(dev)
@@ -40,6 +44,7 @@ class Didaq:
         self.spi.mode = 0b01
         self.BYTE_ADDRESS_BITSHIFT=2 ##for system memory map access
         self.dev = dev
+        self._initialized = True
 
     def spiXfer(self, rw, address_word, data_word):
         '''
