@@ -17,7 +17,7 @@ adr_misc_ctrl  = 0x34
 class Didaq:
     _didaqs= {}
 
-    def __new__(cls, dev, *args, **kwargs):
+    def __new__(cls, dev='/dev/spidev1.0', *args, **kwargs):
         if dev in cls._didaqs:
             return cls._didaqs[dev]
         cls._didaqs[dev] = super().__new__(cls)
