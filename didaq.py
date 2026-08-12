@@ -18,7 +18,7 @@ class Didaq:
     _didaqs= {}
 
 # ensure we only have one didaq per device
-    def __new__(cls, dev='/dev/spidev1.0')
+    def __new__(cls, dev='/dev/spidev1.0'):
         if dev not in cls._didaqs:
             cls._didaqs[dev] = super().__new__(cls)
         return cls._didaqs[dev]
