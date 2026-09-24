@@ -21,11 +21,20 @@ parser.add_argument('-f', '--fs_range', type=lambda x: int(x, 0), nargs=6,
                          '  0xA000 (40960) ->  800 mVpp\n'
                          '  0x2000 ( 8192) ->  500 mVpp\n'
                          '(default: 0xFFFF for all ADCs)')
+
+parser.add_argument('-l','--low_power', action='store_true')
+
 args = parser.parse_args()
 
+pd_mask = 0x00
+num_chs_to_align = 24
+if args.low_power == True:
+    pd_mask = 0x38
+    num_chs_to_align = 12
+    
 directory = 'info/' if "DIDAQ_INFO_DIR" not in os.environ else os.environ['DIDAQ_INFO_DIR'] + '/'
 
-print('starting didaq.... if hangs for more than 5 sec at start may need to do a USBHUB_RESET via the console ')
+print('starting didaq in', num_chs_to_align, 'ch mode.... if hangs for more than 5 sec at start may need to do a USBHUB_RESET via the console ')
 
 pll = didaq_i2c.PLLConfig()
 pll.configure()
@@ -52,13 +61,14 @@ while((not align) and (tries < 3)):
     print('starting up ADC and data')
 
     time.sleep(1)
-    adc_config.run(adc_fs_ranges=args.fs_range)
+    adc_config.run(pd_mask=pd_mask,adc_fs_ranges=args.fs_range)
+        
     time.sleep(5)
     dat_spit = didaq_data_spi.takeEvent(cal_pulse=True, filename=directory+'dump.dat')
     dat = didaq_data_spi.takeEvent(cal_pulse=True, filename=directory+'aligntest.dat')
 
     align_vector=[]
-    for i in range(24):
+    for i in range(num_chs_to_align):
         align_vector.append(numpy.where(dat[i,100:] < 122)[0][0])
 
     print('edges:', align_vector)
